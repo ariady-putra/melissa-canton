@@ -64,6 +64,52 @@ template Melissa
               assets = [asset]
           
           return (l ,r)
+    
+    choice AddApprover : ContractId Melissa
+      with
+        proposal : ContractId AddApproverProposal
+        executor : Party
+      controller executor
+        do
+          approval <- fetch proposal
+          approval.to === self
+          
+          assertMsg "Already Registered"
+            $ approval.approver `notElem` approvers
+          
+          assertMsg "Invalid Approver(s)"
+            $ all (`elem` approvers) approval.approvers
+          
+          assertMsg "Insufficient Approvals"
+            $ (length . dedup) approval.approvers >= threshold
+          
+          archive proposal
+          
+          create this
+            with approvers = approval.approver :: approvers
+    
+    choice RemoveApprover : ContractId Melissa
+      with
+        proposal : ContractId RemoveApproverProposal
+        executor : Party
+      controller executor
+        do
+          approval <- fetch proposal
+          approval.from === self
+          
+          assertMsg "Already Unregistered"
+            $ approval.approver `elem` approvers
+          
+          assertMsg "Invalid Approver(s)"
+            $ all (`elem` approvers) approval.approvers
+          
+          assertMsg "Insufficient Approvals"
+            $ (length . dedup) approval.approvers >= threshold
+          
+          archive proposal
+          
+          create this
+            with approvers = filter (/= approval.approver) approvers
 
 template TransferProposal
   with
@@ -78,7 +124,7 @@ template TransferProposal
     
     ensure asset.amount > 0.0
     
-    choice Approve : ContractId TransferProposal
+    choice TransferProposal_Approve : ContractId TransferProposal
       with approver : Party
       controller approver
         do
@@ -98,6 +144,72 @@ template TransferProposal
           create this
             with approvers = approver :: this.approvers
     
-    choice Cancel : ()
+    choice TransferProposal_Cancel : ()
       controller to
+        do return ()
+
+template AddApproverProposal
+  with
+    to        : ContractId Melissa
+    approver  : Party
+    approvers : [Party]
+    proposer  : Party
+    auditor   : Party
+  where
+    signatory proposer, approvers
+    observer  auditor
+    
+    choice AddApproverProposal_Approve : ContractId AddApproverProposal
+      with approver : Party
+      controller approver
+        do
+          assertMsg "Already Approved"
+            $ approver `notElem` approvers
+          
+          Melissa { approvers } <- fetch to
+          
+          assertMsg "Unregistered Approver"
+            $ approver `elem` approvers
+          
+          assertMsg "Already Registered"
+            $ this.approver `notElem` approvers
+          
+          create this
+            with approvers = approver :: this.approvers
+    
+    choice AddApproverProposal_Cancel : ()
+      controller approver
+        do return ()
+
+template RemoveApproverProposal
+  with
+    from      : ContractId Melissa
+    approver  : Party
+    approvers : [Party]
+    proposer  : Party
+    auditor   : Party
+  where
+    signatory proposer, approvers
+    observer  auditor
+    
+    choice RemoveApproverProposal_Approve : ContractId RemoveApproverProposal
+      with approver : Party
+      controller approver
+        do
+          assertMsg "Already Approved"
+            $ approver `notElem` approvers
+          
+          Melissa { approvers } <- fetch from
+          
+          assertMsg "Unregistered Approver"
+            $ approver `elem` approvers
+          
+          assertMsg "Already Unregistered"
+            $ this.approver `elem` approvers
+          
+          create this
+            with approvers = approver :: this.approvers
+    
+    choice RemoveApproverProposal_Cancel : ()
+      controller proposer
         do return ()

@@ -4,16 +4,26 @@ import Melissa
 import Data
 import Daml.Script
 
+setup = mapA
+  (allocatePartyByHint . PartyIdHint)
+  [ "Issuer"
+  , "Alice"
+  , "Bob"
+  , "Auditor"
+  , "Approver1"
+  , "Approver2"
+  , "Approver3"
+  ]
+
 testProposeTransfer : Script ()
 testProposeTransfer = script do
-  let newParty = allocatePartyByHint . PartyIdHint
-  issuer    <- newParty "Issuer"
-  alice     <- newParty "Alice"
-  bob       <- newParty "Bob"
-  auditor   <- newParty "Auditor"
-  approver1 <- newParty "Approver1"
-  approver2 <- newParty "Approver2"
-  approver3 <- newParty "Approver3"
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
   
   melissa <- [issuer, alice, approver1, approver2, approver3] `submit` do
     createCmd Melissa
@@ -36,12 +46,12 @@ testProposeTransfer = script do
   
   Some disclosure <- bob `queryDisclosure` proposal
   proposal <- (actAs approver1 <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` Approve
+    proposal `exerciseCmd` TransferProposal_Approve
       with approver = approver1
   
   Some disclosure <- bob `queryDisclosure` proposal
   proposal <- (actAs approver2 <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` Approve
+    proposal `exerciseCmd` TransferProposal_Approve
       with approver = approver2
   
   Some disclosure <- alice `queryDisclosure` melissa
@@ -51,5 +61,95 @@ testProposeTransfer = script do
         asset    = Token with name = "COIN", amount = 20.00
         to       = bob
         approval = proposal
+  
+  return ()
+
+testProposeAddApprover : Script ()
+testProposeAddApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  melissa <- [issuer, alice] `submit` do
+    createCmd Melissa
+      with
+        issuer    = issuer
+        owner     = issuer
+        auditor
+        approvers = [issuer]
+        threshold = 1
+        assets    = [Token with name = "COIN", amount = 100.00]
+  
+  proposal <- approver1 `submit` do
+    createCmd AddApproverProposal
+      with
+        to        = melissa
+        approver  = approver1
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  approval <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` AddApproverProposal_Approve
+      with approver = issuer
+  
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs approver1 <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` AddApprover
+      with
+        proposal = approval
+        executor = approver1
+  
+  return ()
+
+testProposeRemoveApprover : Script ()
+testProposeRemoveApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  melissa <- [issuer, alice, approver1, approver2] `submit` do
+    createCmd Melissa
+      with
+        issuer    = issuer
+        owner     = alice
+        auditor
+        approvers = [issuer, approver1, approver2]
+        threshold = 2
+        assets    = [Token with name = "COIN", amount = 100.00]
+  
+  proposal <- approver1 `submit` do
+    createCmd RemoveApproverProposal
+      with
+        from      = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = issuer
+  
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = approver1
+  
+  Some disclosure1 <- issuer `queryDisclosure` melissa
+  Some disclosure2 <- approver1 `queryDisclosure` proposal
+  (actAs bob <> discloseMany [disclosure1, disclosure2]) `submit` do
+    melissa `exerciseCmd` RemoveApprover
+      with proposal, executor = bob
   
   return ()
