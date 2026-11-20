@@ -1,0 +1,7 @@
+module Data where
+
+data Token
+  = Token with
+    name   : Text
+    amount : Decimal
+  deriving (Eq, Show)

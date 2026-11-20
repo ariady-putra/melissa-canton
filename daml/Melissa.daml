@@ -1,0 +1,103 @@
+module Melissa where
+
+import Data
+import DA.Assert ((===))
+import DA.List (dedup)
+import DA.Map qualified as Map
+
+template Melissa
+  with
+    issuer    : Party
+    owner     : Party
+    auditor   : Party
+    approvers : [Party]
+    threshold : Int
+    assets    : [Token]
+  where
+    signatory issuer, owner, approvers
+    observer  auditor
+    
+    ensure (length . dedup) approvers >= threshold && not (null assets)
+    
+    choice Transfer : (Optional (ContractId Melissa), ContractId Melissa)
+      with
+        asset    : Token
+        to       : Party
+        approval : ContractId TransferProposal
+      controller to
+        do
+          proposal <- fetch approval
+          
+          proposal.from  === self
+          proposal.asset === asset
+          proposal.to    === to
+          
+          assertMsg "Invalid Approver(s)"
+            $ all (`elem` approvers) proposal.approvers
+          
+          assertMsg "Insufficient Approvals"
+            $ (length . dedup) proposal.approvers >= threshold
+          
+          assertMsg "Invalid Asset"
+            $ any (\token ->
+                token.name == asset.name && token.amount >= asset.amount
+              ) assets
+          
+          archive approval
+          
+          let leftover = filter (\token ->
+                  token.amount > 0.0
+                ) $ map (\(name, amount) ->
+                  Token with name, amount = amount - asset.amount
+                ) $ Map.toList $ foldr (\token ->
+                  Map.insertWith (+) token.name token.amount
+                ) Map.empty assets
+          
+          l <- if null leftover
+                then pure None
+                else Some <$> create this
+                  with assets = leftover
+          
+          r <- create this
+            with
+              owner  = to
+              assets = [asset]
+          
+          return (l ,r)
+
+template TransferProposal
+  with
+    from      : ContractId Melissa
+    asset     : Token
+    to        : Party
+    auditor   : Party
+    approvers : [Party]
+  where
+    signatory to, approvers
+    observer  auditor
+    
+    ensure asset.amount > 0.0
+    
+    choice Approve : ContractId TransferProposal
+      with approver : Party
+      controller approver
+        do
+          assertMsg "Already Approved"
+            $ approver `notElem` approvers
+          
+          Melissa { approvers, assets } <- fetch from
+          
+          assertMsg "Unregistered Approver"
+            $ approver `elem` approvers
+          
+          assertMsg "Invalid Asset"
+            $ any (\token ->
+                token.name == asset.name && token.amount >= asset.amount
+              ) assets
+          
+          create this
+            with approvers = approver :: this.approvers
+    
+    choice Cancel : ()
+      controller to
+        do return ()

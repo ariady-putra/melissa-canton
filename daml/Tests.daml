@@ -1,0 +1,55 @@
+module Tests where
+
+import Melissa
+import Data
+import Daml.Script
+
+testProposeTransfer : Script ()
+testProposeTransfer = script do
+  let newParty = allocatePartyByHint . PartyIdHint
+  issuer    <- newParty "Issuer"
+  alice     <- newParty "Alice"
+  bob       <- newParty "Bob"
+  auditor   <- newParty "Auditor"
+  approver1 <- newParty "Approver1"
+  approver2 <- newParty "Approver2"
+  approver3 <- newParty "Approver3"
+  
+  melissa <- [issuer, alice, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer    = issuer
+        owner     = alice
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        assets    = [Token with name = "COIN", amount = 100.00]
+  
+  proposal <- bob `submit` do
+    createCmd TransferProposal
+      with
+        from      = melissa
+        asset     = Token with name = "COIN", amount = 20.00
+        to        = bob
+        auditor
+        approvers = []
+  
+  Some disclosure <- bob `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` Approve
+      with approver = approver1
+  
+  Some disclosure <- bob `queryDisclosure` proposal
+  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` Approve
+      with approver = approver2
+  
+  Some disclosure <- alice `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` Transfer
+      with
+        asset    = Token with name = "COIN", amount = 20.00
+        to       = bob
+        approval = proposal
+  
+  return ()
