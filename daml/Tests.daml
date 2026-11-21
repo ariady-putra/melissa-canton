@@ -2,8 +2,14 @@ module Tests where
 
 import Melissa
 import Data
+import DA.Map qualified as Map
 import Daml.Script
+import DA.Assert (assertEq)
 
+coin : Decimal -> Token
+coin amount = Token with name = "COIN", amount
+
+setup : Script [Party]
 setup = mapA
   (allocatePartyByHint . PartyIdHint)
   [ "Issuer"
@@ -25,42 +31,66 @@ testProposeTransfer = script do
    approver2,
    approver3] <- setup
   
+  -- init vault
   melissa <- [issuer, alice, approver1, approver2, approver3] `submit` do
     createCmd Melissa
       with
-        issuer    = issuer
-        owner     = alice
+        issuer
         auditor
         approvers = [approver1, approver2, approver3]
         threshold = 2
-        assets    = [Token with name = "COIN", amount = 100.00]
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- bob creates a transfer proposal
   proposal <- bob `submit` do
     createCmd TransferProposal
       with
-        from      = melissa
-        asset     = Token with name = "COIN", amount = 20.00
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
         to        = bob
         auditor
         approvers = []
   
+  -- approver1 approves
   Some disclosure <- bob `queryDisclosure` proposal
   proposal <- (actAs approver1 <> disclose disclosure) `submit` do
     proposal `exerciseCmd` TransferProposal_Approve
       with approver = approver1
   
+  -- approver2 approves
   Some disclosure <- bob `queryDisclosure` proposal
   proposal <- (actAs approver2 <> disclose disclosure) `submit` do
     proposal `exerciseCmd` TransferProposal_Approve
       with approver = approver2
   
-  Some disclosure <- alice `queryDisclosure` melissa
-  (actAs bob <> disclose disclosure) `submit` do
+  -- bob executes transfer
+  Some disclosure <- issuer `queryDisclosure` melissa
+  melissa <- (actAs bob <> disclose disclosure) `submit` do
     melissa `exerciseCmd` Transfer
-      with
-        asset    = Token with name = "COIN", amount = 20.00
-        to       = bob
-        approval = proposal
+      with proposal, executor = bob
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 80.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq [coin 20.0]
   
   return ()
 
@@ -74,30 +104,34 @@ testProposeAddApprover = script do
    approver2,
    approver3] <- setup
   
+  -- init vault
   melissa <- [issuer, alice] `submit` do
     createCmd Melissa
       with
-        issuer    = issuer
-        owner     = issuer
+        issuer
         auditor
         approvers = [issuer]
         threshold = 1
-        assets    = [Token with name = "COIN", amount = 100.00]
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- approver1 creates an add approver proposal
   proposal <- approver1 `submit` do
     createCmd AddApproverProposal
       with
-        to        = melissa
+        vault     = melissa
         approver  = approver1
         approvers = []
         proposer  = approver1
         auditor
   
+  -- issuer approves
   Some disclosure <- approver1 `queryDisclosure` proposal
   approval <- (actAs issuer <> disclose disclosure) `submit` do
     proposal `exerciseCmd` AddApproverProposal_Approve
       with approver = issuer
   
+  -- approver1 executes add approver
   Some disclosure <- issuer `queryDisclosure` melissa
   (actAs approver1 <> disclose disclosure) `submit` do
     melissa `exerciseCmd` AddApprover
@@ -117,35 +151,41 @@ testProposeRemoveApprover = script do
    approver2,
    approver3] <- setup
   
+  -- init vault
   melissa <- [issuer, alice, approver1, approver2] `submit` do
     createCmd Melissa
       with
-        issuer    = issuer
-        owner     = alice
+        issuer
         auditor
         approvers = [issuer, approver1, approver2]
         threshold = 2
-        assets    = [Token with name = "COIN", amount = 100.00]
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- approver1 creates a remove approver proposal
   proposal <- approver1 `submit` do
     createCmd RemoveApproverProposal
       with
-        from      = melissa
+        vault     = melissa
         approver  = approver2
         approvers = []
         proposer  = approver1
         auditor
   
+  -- issuer approves
   Some disclosure <- approver1 `queryDisclosure` proposal
   proposal <- (actAs issuer <> disclose disclosure) `submit` do
     proposal `exerciseCmd` RemoveApproverProposal_Approve
       with approver = issuer
   
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+  -- approver1 approves
+  -- Some disclosure <- approver1 `queryDisclosure` proposal
+  -- proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+  proposal <- approver1 `submit` do
     proposal `exerciseCmd` RemoveApproverProposal_Approve
       with approver = approver1
   
+  -- approver1 executes remove approver
   Some disclosure1 <- issuer `queryDisclosure` melissa
   Some disclosure2 <- approver1 `queryDisclosure` proposal
   (actAs bob <> discloseMany [disclosure1, disclosure2]) `submit` do

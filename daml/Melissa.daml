@@ -3,67 +3,81 @@ module Melissa where
 import Data
 import DA.Assert ((===))
 import DA.List (dedup)
+import DA.Map (Map)
 import DA.Map qualified as Map
+import DA.Optional (fromOptional)
 
 template Melissa
   with
     issuer    : Party
-    owner     : Party
     auditor   : Party
     approvers : [Party]
     threshold : Int
-    assets    : [Token]
+    name      : Text
+    assets    : Map Party [Token]
   where
-    signatory issuer, owner, approvers
+    signatory issuer, approvers
     observer  auditor
     
-    ensure (length . dedup) approvers >= threshold && not (null assets)
+    ensure (length . dedup) approvers >= threshold
     
-    choice Transfer : (Optional (ContractId Melissa), ContractId Melissa)
+    key (issuer, name) : (Party, Text)
+    maintainer key._1
+    
+    nonconsuming choice BalanceOf : [Token]
+      with owner : Party
+      controller owner
+        do return $ fromOptional [] $ Map.lookup owner assets
+    
+    choice Transfer : ContractId Melissa
       with
-        asset    : Token
-        to       : Party
-        approval : ContractId TransferProposal
-      controller to
+        proposal : ContractId TransferProposal
+        executor : Party
+      controller executor
         do
-          proposal <- fetch approval
-          
-          proposal.from  === self
-          proposal.asset === asset
-          proposal.to    === to
+          approval <- fetch proposal
+          approval.vault === self
           
           assertMsg "Invalid Approver(s)"
-            $ all (`elem` approvers) proposal.approvers
+            $ all (`elem` approvers) approval.approvers
           
           assertMsg "Insufficient Approvals"
-            $ (length . dedup) proposal.approvers >= threshold
+            $ (length . dedup) approval.approvers >= threshold
           
           assertMsg "Invalid Asset"
-            $ any (\token ->
-                token.name == asset.name && token.amount >= asset.amount
-              ) assets
+            $ any (\(owner, tokens) ->
+                owner == approval.from && any (\token ->
+                  token.name == approval.asset.name &&
+                  token.amount >= approval.asset.amount
+                ) tokens
+              ) $ Map.toList assets
           
-          archive approval
+          archive proposal
           
-          let leftover = filter (\token ->
+          let f adjust = filter (\token ->
                   token.amount > 0.0
-                ) $ map (\(name, amount) ->
-                  Token with name, amount = amount - asset.amount
-                ) $ Map.toList $ foldr (\token ->
+                ) . map (\(name, amount) ->
+                  Token
+                    with
+                      name
+                      amount = adjust amount approval.asset.amount
+                ) . Map.toList . foldr (\token ->
                   Map.insertWith (+) token.name token.amount
-                ) Map.empty assets
+                ) Map.empty
           
-          l <- if null leftover
-                then pure None
-                else Some <$> create this
-                  with assets = leftover
-          
-          r <- create this
-            with
-              owner  = to
-              assets = [asset]
-          
-          return (l ,r)
+          create this
+            with assets =
+                  Map.filter (not . null) $
+                  
+                  -- debit
+                  Map.alter (\tokens ->
+                    case tokens of
+                      Some tokens -> Some $ f (+) tokens
+                      None        -> Some [approval.asset]
+                  ) approval.to $
+                  
+                  -- credit
+                  Map.alter (Some . f (-) =<<) approval.from assets
     
     choice AddApprover : ContractId Melissa
       with
@@ -72,7 +86,7 @@ template Melissa
       controller executor
         do
           approval <- fetch proposal
-          approval.to === self
+          approval.vault === self
           
           assertMsg "Already Registered"
             $ approval.approver `notElem` approvers
@@ -95,7 +109,7 @@ template Melissa
       controller executor
         do
           approval <- fetch proposal
-          approval.from === self
+          approval.vault === self
           
           assertMsg "Already Unregistered"
             $ approval.approver `elem` approvers
@@ -113,8 +127,9 @@ template Melissa
 
 template TransferProposal
   with
-    from      : ContractId Melissa
+    vault     : ContractId Melissa
     asset     : Token
+    from      : Party
     to        : Party
     auditor   : Party
     approvers : [Party]
@@ -131,15 +146,18 @@ template TransferProposal
           assertMsg "Already Approved"
             $ approver `notElem` approvers
           
-          Melissa { approvers, assets } <- fetch from
+          Melissa { approvers, assets } <- fetch vault
           
           assertMsg "Unregistered Approver"
             $ approver `elem` approvers
           
           assertMsg "Invalid Asset"
-            $ any (\token ->
-                token.name == asset.name && token.amount >= asset.amount
-              ) assets
+            $ any (\(owner, tokens) ->
+                owner == from && any (\token ->
+                  token.name == asset.name &&
+                  token.amount >= asset.amount
+                ) tokens
+              ) $ Map.toList assets
           
           create this
             with approvers = approver :: this.approvers
@@ -150,7 +168,7 @@ template TransferProposal
 
 template AddApproverProposal
   with
-    to        : ContractId Melissa
+    vault     : ContractId Melissa
     approver  : Party
     approvers : [Party]
     proposer  : Party
@@ -166,7 +184,7 @@ template AddApproverProposal
           assertMsg "Already Approved"
             $ approver `notElem` approvers
           
-          Melissa { approvers } <- fetch to
+          Melissa { approvers } <- fetch vault
           
           assertMsg "Unregistered Approver"
             $ approver `elem` approvers
@@ -183,7 +201,7 @@ template AddApproverProposal
 
 template RemoveApproverProposal
   with
-    from      : ContractId Melissa
+    vault     : ContractId Melissa
     approver  : Party
     approvers : [Party]
     proposer  : Party
@@ -199,7 +217,7 @@ template RemoveApproverProposal
           assertMsg "Already Approved"
             $ approver `notElem` approvers
           
-          Melissa { approvers } <- fetch from
+          Melissa { approvers } <- fetch vault
           
           assertMsg "Unregistered Approver"
             $ approver `elem` approvers
