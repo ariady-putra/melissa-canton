@@ -146,6 +146,28 @@ template Melissa
           
           create this
             with approvers = filter (/= permit.approver) approvers
+    
+    choice SetThreshold : ContractId Melissa
+      with
+        proposal : ContractId SetThresholdProposal
+        executor : Party -- ^ Proposer
+      controller executor
+        do
+          permit <- fetch proposal
+          
+          permit.vault    === self
+          permit.proposer === executor
+          
+          assertMsg "Invalid Approver(s)"
+            $ all (`elem` approvers) permit.approvers
+          
+          assertMsg "Insufficient Approvals"
+            $ (length . dedup) permit.approvers >= threshold
+          
+          archive proposal
+          
+          create this
+            with threshold = permit.threshold
 
 template TransferProposal
   with
@@ -266,3 +288,33 @@ template RemoveApproverProposal
     -- choice RemoveApproverProposal_Archive : ()
     --   controller approver
     --     do return ()
+
+template SetThresholdProposal
+  with
+    vault     : ContractId Melissa
+    threshold : Int
+    approvers : [Party]
+    proposer  : Party
+    auditor   : Party
+  where
+    signatory proposer, approvers
+    observer  auditor
+    
+    choice SetThresholdProposal_Approve : ContractId SetThresholdProposal
+      with approver : Party
+      controller approver
+        do
+          assertMsg "Already Approved"
+            $ approver `notElem` approvers
+          
+          Melissa { approvers } <- fetch vault
+          
+          assertMsg "Unregistered Approver"
+            $ approver `elem` approvers
+          
+          create this
+            with approvers = approver :: this.approvers
+    
+    choice SetThresholdProposal_Cancel : ()
+      controller proposer
+        do return ()
