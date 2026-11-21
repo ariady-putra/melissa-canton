@@ -471,7 +471,7 @@ testProposeRemoveApprover_Negative_StaleProposal = script do
     createCmd RemoveApproverProposal
       with
         vault     = melissa
-        approver  = approver2
+        approver  = approver3
         approvers = []
         proposer  = approver1
         auditor
@@ -494,11 +494,11 @@ testProposeRemoveApprover_Negative_StaleProposal = script do
     proposal1 `exerciseCmd` RemoveApproverProposal_Approve
       with approver = approver3
   
-  -- approver3 approves proposal2
+  -- approver2 approves proposal2
   Some disclosure <- approver1 `queryDisclosure` proposal2
-  proposal2 <- (actAs approver3 <> disclose disclosure) `submit` do
+  proposal2 <- (actAs approver2 <> disclose disclosure) `submit` do
     proposal2 `exerciseCmd` RemoveApproverProposal_Approve
-      with approver = approver3
+      with approver = approver2
   
   -- approver1 executes remove approver (proposal1)
   melissa <- approver1 `submit` do
