@@ -520,3 +520,557 @@ testProposeTransfer_PartiesHasMultipleTokens = script do
     >>= assertEq [coin 70.0, nft]
   
   return ()
+
+-- Negative Cases
+
+testProposeTransfer_Negative_InvalidAssetAmount : Script ()
+testProposeTransfer_Negative_InvalidAssetAmount = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 101.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  (actAs approver1 <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_InvalidAssetName : Script ()
+testProposeTransfer_Negative_InvalidAssetName = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = nft
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  (actAs approver1 <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_UnregisteredApprover : Script ()
+testProposeTransfer_Negative_UnregisteredApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- issuer tries to approve
+  Some disclosure <- alice `queryDisclosure` proposal
+  (actAs issuer <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = issuer
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_AlreadyApproves : Script ()
+testProposeTransfer_Negative_AlreadyApproves = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- approver1 re-approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  (actAs approver1 <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_InsufficientApprovals : Script ()
+testProposeTransfer_Negative_InsufficientApprovals = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- bob executes transfer
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submitMustFail` do
+    melissa `exerciseCmd` Transfer
+      with proposal, executor = bob
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_NotExecutedByRecepient : Script ()
+testProposeTransfer_Negative_NotExecutedByRecepient = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- approver2 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver2
+  
+  -- alice tries to execute transfer
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submitMustFail` do
+    melissa `exerciseCmd` Transfer
+      with proposal, executor = alice
+  
+  -- alice cancels the proposal
+  alice `submit` do
+    proposal `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq []
+  
+  return ()
+
+testProposeTransfer_Negative_StaleProposal : Script ()
+testProposeTransfer_Negative_StaleProposal = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal1 <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- alice creates another transfer proposal
+  proposal2 <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves proposal1
+  Some disclosure <- alice `queryDisclosure` proposal1
+  proposal1 <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- approver1 approves proposal2
+  Some disclosure <- alice `queryDisclosure` proposal2
+  proposal2 <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- approver2 approves proposal1
+  Some disclosure <- alice `queryDisclosure` proposal1
+  proposal1 <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` TransferProposal_Approve
+      with approver = approver2
+  
+  -- approver2 approves proposal2
+  Some disclosure <- alice `queryDisclosure` proposal2
+  proposal2 <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` TransferProposal_Approve
+      with approver = approver2
+  
+  -- bob executes transfer (proposal1)
+  Some disclosure <- issuer `queryDisclosure` melissa
+  melissa <- (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` Transfer
+      with
+        proposal = proposal1
+        executor = bob
+  
+  -- bob tries to execute transfer (proposal2)
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submitMustFail` do
+    melissa `exerciseCmd` Transfer
+      with
+        proposal = proposal2
+        executor = bob
+  
+  -- alice cancels proposal2 (stale)
+  alice `submit` do
+    proposal2 `exerciseCmd` TransferProposal_Cancel
+  
+  -- assert all proposals are archived
+  length <$> query @TransferProposal alice
+    >>= assertEq 0
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 80.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq [coin 20.00]
+  
+  return ()
