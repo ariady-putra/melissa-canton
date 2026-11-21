@@ -54,7 +54,7 @@ testProposeSetThreshold = script do
     proposal `exerciseCmd` SetThresholdProposal_Approve
       with approver = approver2
   
-  -- approver1 executes remove approver
+  -- approver1 executes set threshold
   melissa <- approver1 `submit` do
     melissa `exerciseCmd` SetThreshold
       with proposal, executor = approver1
@@ -114,7 +114,7 @@ testProposeSetThreshold_Negative_ThresholdIsGtApprovers = script do
     proposal `exerciseCmd` SetThresholdProposal_Approve
       with approver = approver2
   
-  -- approver1 executes remove approver
+  -- approver1 executes set threshold
   approver1 `submitMustFail` do
     melissa `exerciseCmd` SetThreshold
       with proposal, executor = approver1
@@ -129,6 +129,267 @@ testProposeSetThreshold_Negative_ThresholdIsGtApprovers = script do
     proposal `exerciseCmd` SetThresholdProposal_Cancel
   
   -- assert proposal is archived
+  length <$> query @SetThresholdProposal approver1
+    >>= assertEq 0
+  
+  return ()
+
+testProposeSetThreshold_Negative_AlreadyApproved : Script ()
+testProposeSetThreshold_Negative_AlreadyApproved = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial threshold
+  Some Melissa {
+    threshold = 2
+  } <- issuer `queryContractId` melissa
+  
+  -- approver1 creates a set threshold proposal
+  proposal <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 3
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- issuer re-approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  (actAs issuer <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- approver1 cancels the proposal
+  approver1 `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @SetThresholdProposal approver1
+    >>= assertEq 0
+  
+  return ()
+
+testProposeSetThreshold_Negative_UnregisteredApprover : Script ()
+testProposeSetThreshold_Negative_UnregisteredApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial threshold
+  Some Melissa {
+    threshold = 2
+  } <- issuer `queryContractId` melissa
+  
+  -- approver1 creates a set threshold proposal
+  proposal <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 3
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- auditor tries to approve
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  (actAs auditor <> disclose disclosure) `submitMustFail` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = auditor
+  
+  -- approver1 cancels the proposal
+  approver1 `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @SetThresholdProposal approver1
+    >>= assertEq 0
+  
+  return ()
+
+testProposeSetThreshold_Negative_InsufficientApprovals : Script ()
+testProposeSetThreshold_Negative_InsufficientApprovals = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial threshold
+  Some Melissa {
+    threshold = 2
+  } <- issuer `queryContractId` melissa
+  
+  -- approver1 creates a set threshold proposal
+  proposal <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 3
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- approver1 executes set threshold
+  approver1 `submitMustFail` do
+    melissa `exerciseCmd` SetThreshold
+      with proposal, executor = approver1
+  
+  -- approver1 cancels the proposal
+  approver1 `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @SetThresholdProposal approver1
+    >>= assertEq 0
+  
+  return ()
+
+testProposeSetThreshold_Negative_StaleProposal : Script ()
+testProposeSetThreshold_Negative_StaleProposal = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial threshold
+  Some Melissa {
+    threshold = 2
+  } <- issuer `queryContractId` melissa
+  
+  -- approver1 creates a set threshold proposal
+  proposal1 <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 3
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- approver1 creates another set threshold proposal
+  proposal2 <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 4
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves proposal1
+  Some disclosure <- approver1 `queryDisclosure` proposal1
+  proposal1 <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- issuer approves proposal2
+  Some disclosure <- approver1 `queryDisclosure` proposal2
+  proposal2 <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- approver2 approves proposal1
+  Some disclosure <- approver1 `queryDisclosure` proposal1
+  proposal1 <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` SetThresholdProposal_Approve
+      with approver = approver2
+  
+  -- approver2 approves proposal2
+  Some disclosure <- approver1 `queryDisclosure` proposal2
+  proposal2 <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` SetThresholdProposal_Approve
+      with approver = approver2
+  
+  -- approver1 executes set threshold (proposal1)
+  melissa <- approver1 `submit` do
+    melissa `exerciseCmd` SetThreshold
+      with
+        proposal = proposal1
+        executor = approver1
+  
+  -- approver1 tries to execute set threshold (proposal2)
+  approver1 `submitMustFail` do
+    melissa `exerciseCmd` SetThreshold
+      with
+        proposal = proposal2
+        executor = approver1
+  
+  -- approver1 cancels proposal2 (stale)
+  approver1 `submit` do
+    proposal2 `exerciseCmd` SetThresholdProposal_Cancel
+  
+  -- assert all proposals are archived
   length <$> query @SetThresholdProposal approver1
     >>= assertEq 0
   
