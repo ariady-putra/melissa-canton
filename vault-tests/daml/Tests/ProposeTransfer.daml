@@ -1005,7 +1005,7 @@ testProposeTransfer_Negative_StaleProposal = script do
     createCmd TransferProposal
       with
         vault     = melissa
-        asset     = coin 20.00
+        asset     = coin 50.00
         from      = alice
         to        = bob
         auditor
