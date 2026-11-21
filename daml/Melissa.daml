@@ -32,27 +32,29 @@ template Melissa
     choice Transfer : ContractId Melissa
       with
         proposal : ContractId TransferProposal
-        executor : Party
+        executor : Party -- ^ Beneficiary
       controller executor
         do
-          approval <- fetch proposal
-          approval.vault === self
+          permit <- fetch proposal
+          
+          permit.vault === self
+          permit.to    === executor
           
           assertMsg "Invalid Approver(s)"
-            $ all (`elem` approvers) approval.approvers
+            $ all (`elem` approvers) permit.approvers
           
           assertMsg "Insufficient Approvals"
-            $ (length . dedup) approval.approvers >= threshold
+            $ (length . dedup) permit.approvers >= threshold
           
           assertMsg "Invalid Asset"
             $ any (\(owner, tokens) ->
-                owner == approval.from && any (\token ->
-                  token.name == approval.asset.name &&
-                  token.amount >= approval.asset.amount
+                owner == permit.from && any (\token ->
+                  token.name == permit.asset.name &&
+                  token.amount >= permit.asset.amount
                 ) tokens
               ) $ Map.toList assets
           
-          archive proposal
+          proposal `exercise` TransferProposal_Archive
           
           let tokensToMap = foldr (\token ->
                   Map.insertWith (+) token.name token.amount
@@ -61,23 +63,23 @@ template Melissa
               tokensToList adjust = filter (\token ->
                   token.amount > 0.0
                 ) . map (\(name, amount) ->
-                  if name == approval.asset.name
+                  if name == permit.asset.name
                     then Token with
                       name
-                      amount = adjust amount approval.asset.amount
+                      amount = adjust amount permit.asset.amount
                     else Token with
                       name
                       amount
                 ) . Map.toList
               
               f adjust tokens =
-                if Map.member approval.asset.name tokensMap
+                if Map.member permit.asset.name tokensMap
                   then tokensToList adjust tokensMap
                   else map (\(name, amount) ->
-                      Token with name, amount
-                    ) $ Map.toList $ Map.insert
-                      approval.asset.name
-                      approval.asset.amount
+                      Token with name, amount   -- convert to Token
+                    ) $ Map.toList $ Map.insert -- convert to list
+                      permit.asset.name   -- key
+                      permit.asset.amount -- value
                       tokensMap
                 where tokensMap = tokensToMap tokens
           
@@ -89,57 +91,61 @@ template Melissa
                   Map.alter (\tokens ->
                     case tokens of
                       Some tokens -> Some $ f (+) tokens
-                      None        -> Some [approval.asset]
-                  ) approval.to $
+                      None        -> Some [permit.asset]
+                  ) permit.to $
                   
                   -- credit
-                  Map.alter (Some . f (-) =<<) approval.from assets
+                  Map.alter (Some . f (-) =<<) permit.from assets
     
     choice AddApprover : ContractId Melissa
       with
         proposal : ContractId AddApproverProposal
-        executor : Party
+        executor : Party -- ^ New approver
       controller executor
         do
-          approval <- fetch proposal
-          approval.vault === self
+          permit <- fetch proposal
+          
+          permit.vault    === self
+          permit.approver === executor
           
           assertMsg "Already Registered"
-            $ approval.approver `notElem` approvers
+            $ permit.approver `notElem` approvers
           
           assertMsg "Invalid Approver(s)"
-            $ all (`elem` approvers) approval.approvers
+            $ all (`elem` approvers) permit.approvers
           
           assertMsg "Insufficient Approvals"
-            $ (length . dedup) approval.approvers >= threshold
+            $ (length . dedup) permit.approvers >= threshold
           
-          archive proposal
+          proposal `exercise` AddApproverProposal_Archive
           
           create this
-            with approvers = approval.approver :: approvers
+            with approvers = permit.approver :: approvers
     
     choice RemoveApprover : ContractId Melissa
       with
         proposal : ContractId RemoveApproverProposal
-        executor : Party
+        executor : Party -- ^ Proposer
       controller executor
         do
-          approval <- fetch proposal
-          approval.vault === self
+          permit <- fetch proposal
+          
+          permit.vault    === self
+          permit.proposer === executor
           
           assertMsg "Already Unregistered"
-            $ approval.approver `elem` approvers
+            $ permit.approver `elem` approvers
           
           assertMsg "Invalid Approver(s)"
-            $ all (`elem` approvers) approval.approvers
+            $ all (`elem` approvers) permit.approvers
           
           assertMsg "Insufficient Approvals"
-            $ (length . dedup) approval.approvers >= threshold
+            $ (length . dedup) permit.approvers >= threshold
           
           archive proposal
           
           create this
-            with approvers = filter (/= approval.approver) approvers
+            with approvers = filter (/= permit.approver) approvers
 
 template TransferProposal
   with
@@ -150,10 +156,11 @@ template TransferProposal
     auditor   : Party
     approvers : [Party]
   where
-    signatory to, approvers
-    observer  auditor
+    signatory from, approvers
+    observer  to, auditor
     
     ensure asset.amount > 0.0
+        && from /= to
     
     choice TransferProposal_Approve : ContractId TransferProposal
       with approver : Party
@@ -179,19 +186,23 @@ template TransferProposal
             with approvers = approver :: this.approvers
     
     choice TransferProposal_Cancel : ()
+      controller from
+        do return ()
+    
+    choice TransferProposal_Archive : ()
       controller to
         do return ()
 
 template AddApproverProposal
   with
     vault     : ContractId Melissa
-    approver  : Party
+    approver  : Party -- ^ The new approver to be added
     approvers : [Party]
     proposer  : Party
     auditor   : Party
   where
     signatory proposer, approvers
-    observer  auditor
+    observer  approver, auditor
     
     choice AddApproverProposal_Approve : ContractId AddApproverProposal
       with approver : Party
@@ -214,17 +225,21 @@ template AddApproverProposal
     choice AddApproverProposal_Cancel : ()
       controller proposer
         do return ()
+    
+    choice AddApproverProposal_Archive : ()
+      controller approver
+        do return ()
 
 template RemoveApproverProposal
   with
     vault     : ContractId Melissa
-    approver  : Party
+    approver  : Party -- ^ The existing approver to be removed
     approvers : [Party]
     proposer  : Party
     auditor   : Party
   where
     signatory proposer, approvers
-    observer  auditor
+    observer  approver, auditor
     
     choice RemoveApproverProposal_Approve : ContractId RemoveApproverProposal
       with approver : Party
@@ -247,3 +262,7 @@ template RemoveApproverProposal
     choice RemoveApproverProposal_Cancel : ()
       controller proposer
         do return ()
+    
+    -- choice RemoveApproverProposal_Archive : ()
+    --   controller approver
+    --     do return ()
