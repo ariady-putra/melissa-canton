@@ -2,7 +2,7 @@ module Tests where
 
 import Melissa
 import Data
-import DA.Assert (assertEq)
+import DA.Assert ((===), assertEq)
 import DA.Map qualified as Map
 import Daml.Script
 
@@ -118,6 +118,10 @@ testProposeAddApprover = script do
         name      = "Vault 101"
         assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer]
+  
   -- issuer creates an add approver proposal
   proposal <- issuer `submit` do
     createCmd AddApproverProposal
@@ -135,11 +139,15 @@ testProposeAddApprover = script do
   
   -- approver1 executes add approver
   Some disclosure <- issuer `queryDisclosure` melissa
-  (actAs approver1 <> disclose disclosure) `submit` do
+  melissa <- (actAs approver1 <> disclose disclosure) `submit` do
     melissa `exerciseCmd` AddApprover
       with
         proposal = approval
         executor = approver1
+  
+  -- assert updated approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [approver1, issuer]
   
   return ()
 
@@ -164,6 +172,10 @@ testProposeRemoveApprover = script do
         name      = "Vault 101"
         assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver2, approver3]
+  
   -- approver1 creates a remove approver proposal
   proposal <- approver1 `submit` do
     createCmd RemoveApproverProposal
@@ -187,9 +199,13 @@ testProposeRemoveApprover = script do
       with approver = approver3
   
   -- approver1 executes remove approver
-  approver1 `submit` do
+  melissa <- approver1 `submit` do
     melissa `exerciseCmd` RemoveApprover
       with proposal, executor = approver1
+  
+  -- assert updated approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver3]
   
   return ()
 
@@ -214,6 +230,10 @@ testProposeSetThreshold = script do
         name      = "Vault 101"
         assets    = Map.fromList [(alice, [coin 100.00])]
   
+  -- assert initial threshold
+  Some Melissa { threshold } <- issuer `queryContractId` melissa
+  threshold === 2
+  
   -- approver1 creates a set threshold proposal
   proposal <- approver1 `submit` do
     createCmd SetThresholdProposal
@@ -237,8 +257,12 @@ testProposeSetThreshold = script do
       with approver = approver2
   
   -- approver1 executes remove approver
-  approver1 `submit` do
+  melissa <- approver1 `submit` do
     melissa `exerciseCmd` SetThreshold
       with proposal, executor = approver1
+  
+  -- assert updated threshold
+  Some Melissa { threshold } <- issuer `queryContractId` melissa
+  threshold === 3
   
   return ()
