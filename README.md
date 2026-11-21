@@ -29,6 +29,38 @@ To perform a transfer action:
 2. The approvers approve the proposal
 3. The receiver can perform the Transfer action
 
+The following is a step by step illustration.
+
+#### 1. Vault's initial state:
+
+| id | status | issuer | auditor | approvers | threshold | name | assets |
+|----|--------|--------|---------|-----------|-----------|------|--------|
+| #0:0 | active | 'Issuer' | 'Auditor' | ['Approver1', 'Approver2', 'Approver3'] | 2 | "Vault 101" | Map['Alice'->[Data:Token with name = "COIN"; amount = 100.00]] |
+
+#### 2. Alice (asset owner) creates a TransferProposal (permit):
+
+| id | status | vault | asset.name | asset.amount | from | to | auditor | approvers |
+|----|--------|-------|------------|--------------|------|----|---------|-----------|
+| #2:0 | active | #0:0 | "COIN" | 20.00 | 'Alice' | 'Bob' | 'Auditor' | [] |
+
+#### 3. Approver1 approves the proposal:
+
+| id | status | vault | asset.name | asset.amount | from | to | auditor | approvers |
+|----|--------|-------|------------|--------------|------|----|---------|-----------|
+| #3:2 | active | #0:0 | "COIN" | 20.00 | 'Alice' | 'Bob' | 'Auditor' | ['Approver1'] |
+
+#### 4. Approver2 approves the proposal:
+
+| id | status | vault | asset.name | asset.amount | from | to | auditor | approvers |
+|----|--------|-------|------------|--------------|------|----|---------|-----------|
+| #4:2 | active | #0:0 | "COIN" | 20.00 | 'Alice' | 'Bob' | 'Auditor' | ['Approver2', 'Approver1'] |
+
+#### 5. Vault's final state after Bob (beneficiary) executes Transfer:
+
+| id | status | issuer | auditor | approvers | threshold | name | assets |
+|----|--------|--------|---------|-----------|-----------|------|--------|
+| #5:3 | active | 'Issuer' | 'Auditor' | ['Approver1', 'Approver2', 'Approver3'] | 2 | "Vault 101" | Map['Alice'->[Data:Token with name = "COIN"; amount = 80.00], 'Bob'->[Data:Token with name = "COIN"; amount = 20.00]] |
+
 ### AddApprover
 
 To add an approver:
