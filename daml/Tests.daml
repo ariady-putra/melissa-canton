@@ -2,9 +2,9 @@ module Tests where
 
 import Melissa
 import Data
+import DA.Assert (assertEq)
 import DA.Map qualified as Map
 import Daml.Script
-import DA.Assert (assertEq)
 
 coin : Decimal -> Token
 coin amount = Token with name = "COIN", amount
@@ -32,7 +32,7 @@ testProposeTransfer = script do
    approver3] <- setup
   
   -- init vault
-  melissa <- [issuer, alice, approver1, approver2, approver3] `submit` do
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
     createCmd Melissa
       with
         issuer
@@ -105,7 +105,7 @@ testProposeAddApprover = script do
    approver3] <- setup
   
   -- init vault
-  melissa <- [issuer, alice] `submit` do
+  melissa <- issuer `submit` do
     createCmd Melissa
       with
         issuer
@@ -152,7 +152,7 @@ testProposeRemoveApprover = script do
    approver3] <- setup
   
   -- init vault
-  melissa <- [issuer, alice, approver1, approver2] `submit` do
+  melissa <- [issuer, approver1, approver2] `submit` do
     createCmd Melissa
       with
         issuer

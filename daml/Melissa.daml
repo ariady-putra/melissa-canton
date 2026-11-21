@@ -54,16 +54,32 @@ template Melissa
           
           archive proposal
           
-          let f adjust = filter (\token ->
-                  token.amount > 0.0
-                ) . map (\(name, amount) ->
-                  Token
-                    with
-                      name
-                      amount = adjust amount approval.asset.amount
-                ) . Map.toList . foldr (\token ->
+          let tokensToMap = foldr (\token ->
                   Map.insertWith (+) token.name token.amount
                 ) Map.empty
+              
+              tokensToList adjust = filter (\token ->
+                  token.amount > 0.0
+                ) . map (\(name, amount) ->
+                  if name == approval.asset.name
+                    then Token with
+                      name
+                      amount = adjust amount approval.asset.amount
+                    else Token with
+                      name
+                      amount
+                ) . Map.toList
+              
+              f adjust tokens =
+                if Map.member approval.asset.name tokensMap
+                  then tokensToList adjust tokensMap
+                  else map (\(name, amount) ->
+                      Token with name, amount
+                    ) $ Map.toList $ Map.insert
+                      approval.asset.name
+                      approval.asset.amount
+                      tokensMap
+                where tokensMap = tokensToMap tokens
           
           create this
             with assets =
@@ -196,7 +212,7 @@ template AddApproverProposal
             with approvers = approver :: this.approvers
     
     choice AddApproverProposal_Cancel : ()
-      controller approver
+      controller proposer
         do return ()
 
 template RemoveApproverProposal
