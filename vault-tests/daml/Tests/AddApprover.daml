@@ -1,0 +1,61 @@
+module Tests.AddApprover where
+
+import Melissa
+import Utils
+import Daml.Script
+import DA.Assert ((===))
+import DA.Map qualified as Map
+
+testProposeAddApprover : Script ()
+testProposeAddApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- issuer `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer]
+        threshold = 1
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer]
+  
+  -- issuer creates an add approver proposal
+  proposal <- issuer `submit` do
+    createCmd AddApproverProposal
+      with
+        vault     = melissa
+        approver  = approver1
+        approvers = []
+        proposer  = issuer
+        auditor
+  
+  -- issuer approves
+  approval <- issuer `submit` do
+    proposal `exerciseCmd` AddApproverProposal_Approve
+      with approver = issuer
+  
+  -- approver1 executes add approver
+  Some disclosure <- issuer `queryDisclosure` melissa
+  melissa <- (actAs approver1 <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` AddApprover
+      with
+        proposal = approval
+        executor = approver1
+  
+  -- assert updated approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [approver1, issuer]
+  
+  return ()

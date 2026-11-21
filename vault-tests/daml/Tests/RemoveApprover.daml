@@ -1,0 +1,65 @@
+module Tests.RemoveApprover where
+
+import Melissa
+import Utils
+import Daml.Script
+import DA.Assert ((===))
+import DA.Map qualified as Map
+
+testProposeRemoveApprover : Script ()
+testProposeRemoveApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver2, approver3]
+  
+  -- approver1 creates a remove approver proposal
+  proposal <- approver1 `submit` do
+    createCmd RemoveApproverProposal
+      with
+        vault     = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = issuer
+  
+  -- approver3 approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs approver3 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = approver3
+  
+  -- approver1 executes remove approver
+  melissa <- approver1 `submit` do
+    melissa `exerciseCmd` RemoveApprover
+      with proposal, executor = approver1
+  
+  -- assert updated approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver3]
+  
+  return ()

@@ -1,0 +1,80 @@
+module Tests.ProposeTransfer where
+
+import Melissa
+import Utils
+import Daml.Script
+import DA.Assert (assertEq)
+import DA.Map qualified as Map
+
+testProposeTransfer : Script ()
+testProposeTransfer = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 100.0]
+  
+  -- alice creates a transfer proposal
+  proposal <- alice `submit` do
+    createCmd TransferProposal
+      with
+        vault     = melissa
+        asset     = coin 20.00
+        from      = alice
+        to        = bob
+        auditor
+        approvers = []
+  
+  -- approver1 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver1 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver1
+  
+  -- approver2 approves
+  Some disclosure <- alice `queryDisclosure` proposal
+  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` TransferProposal_Approve
+      with approver = approver2
+  
+  -- bob executes transfer
+  Some disclosure <- issuer `queryDisclosure` melissa
+  melissa <- (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` Transfer
+      with proposal, executor = bob
+  
+  -- assert alice's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs alice <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = alice
+    >>= assertEq [coin 80.0]
+  
+  -- assert bob's balance
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs bob <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` BalanceOf
+      with owner = bob
+    >>= assertEq [coin 20.0]
+  
+  return ()

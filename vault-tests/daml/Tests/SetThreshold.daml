@@ -1,0 +1,65 @@
+module Tests.SetThreshold where
+
+import Melissa
+import Utils
+import Daml.Script
+import DA.Assert ((===))
+import DA.Map qualified as Map
+
+testProposeSetThreshold : Script ()
+testProposeSetThreshold = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial threshold
+  Some Melissa { threshold } <- issuer `queryContractId` melissa
+  threshold === 2
+  
+  -- approver1 creates a set threshold proposal
+  proposal <- approver1 `submit` do
+    createCmd SetThresholdProposal
+      with
+        vault     = melissa
+        threshold = 3
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = issuer
+  
+  -- approver2 approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` SetThresholdProposal_Approve
+      with approver = approver2
+  
+  -- approver1 executes remove approver
+  melissa <- approver1 `submit` do
+    melissa `exerciseCmd` SetThreshold
+      with proposal, executor = approver1
+  
+  -- assert updated threshold
+  Some Melissa { threshold } <- issuer `queryContractId` melissa
+  threshold === 3
+  
+  return ()

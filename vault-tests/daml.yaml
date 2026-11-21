@@ -1,8 +1,10 @@
 sdk-version: 3.6.4
-name: melissa
+name: melissa-tests
 source: daml
 version: 0.0.1
 dependencies:
   - daml-prim
   - daml-stdlib
   - daml-script
+data-dependencies:
+  - ../vault-model/.daml/dist/melissa-0.0.1.dar
