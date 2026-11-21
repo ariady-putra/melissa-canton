@@ -368,3 +368,158 @@ testProposeRemoveApprover_Negative_InsufficientApprovals = script do
     >>= assertEq 0
   
   return ()
+
+testProposeRemoveApprover_Negative_NotExecutedByProposer : Script ()
+testProposeRemoveApprover_Negative_NotExecutedByProposer = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver2, approver3]
+  
+  -- approver1 creates a remove approver proposal
+  proposal <- approver1 `submit` do
+    createCmd RemoveApproverProposal
+      with
+        vault     = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = issuer
+  
+  -- approver3 approves
+  Some disclosure <- approver1 `queryDisclosure` proposal
+  proposal <- (actAs approver3 <> disclose disclosure) `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = approver3
+  
+  -- approver2 tries to execute remove approver
+  approver2 `submitMustFail` do
+    melissa `exerciseCmd` RemoveApprover
+      with proposal, executor = approver2
+  
+  -- approver1 cancels the proposal
+  approver1 `submit` do
+    proposal `exerciseCmd` RemoveApproverProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @RemoveApproverProposal approver1
+    >>= assertEq 0
+  
+  return ()
+
+testProposeRemoveApprover_Negative_StaleProposal : Script ()
+testProposeRemoveApprover_Negative_StaleProposal = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- [issuer, approver1, approver2, approver3] `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer, approver1, approver2, approver3]
+        threshold = 2
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer, approver1, approver2, approver3]
+  
+  -- approver1 creates a remove approver proposal
+  proposal1 <- approver1 `submit` do
+    createCmd RemoveApproverProposal
+      with
+        vault     = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- approver1 creates another remove approver proposal
+  proposal2 <- approver1 `submit` do
+    createCmd RemoveApproverProposal
+      with
+        vault     = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = approver1
+        auditor
+  
+  -- issuer approves proposal1
+  Some disclosure <- approver1 `queryDisclosure` proposal1
+  proposal1 <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = issuer
+  
+  -- issuer approves proposal2
+  Some disclosure <- approver1 `queryDisclosure` proposal2
+  proposal2 <- (actAs issuer <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = issuer
+  
+  -- approver3 approves proposal1
+  Some disclosure <- approver1 `queryDisclosure` proposal1
+  proposal1 <- (actAs approver3 <> disclose disclosure) `submit` do
+    proposal1 `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = approver3
+  
+  -- approver3 approves proposal2
+  Some disclosure <- approver1 `queryDisclosure` proposal2
+  proposal2 <- (actAs approver3 <> disclose disclosure) `submit` do
+    proposal2 `exerciseCmd` RemoveApproverProposal_Approve
+      with approver = approver3
+  
+  -- approver1 executes remove approver (proposal1)
+  melissa <- approver1 `submit` do
+    melissa `exerciseCmd` RemoveApprover
+      with
+        proposal = proposal1
+        executor = approver1
+  
+  -- approver1 tries to execute remove approver (proposal2)
+  approver1 `submitMustFail` do
+    melissa `exerciseCmd` RemoveApprover
+      with
+        proposal = proposal2
+        executor = approver1
+  
+  -- approver1 cancels proposal2 (stale)
+  approver1 `submit` do
+    proposal2 `exerciseCmd` RemoveApproverProposal_Cancel
+  
+  -- assert all proposals are archived
+  length <$> query @RemoveApproverProposal approver1
+    >>= assertEq 0
+  
+  return ()

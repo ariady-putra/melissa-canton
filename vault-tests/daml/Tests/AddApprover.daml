@@ -349,3 +349,141 @@ testProposeAddApprover_Negative_InsufficientApprovals = script do
     >>= assertEq 0
   
   return ()
+
+testProposeAddApprover_Negative_NotExecutedByTheNewApprover : Script ()
+testProposeAddApprover_Negative_NotExecutedByTheNewApprover = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- issuer `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer]
+        threshold = 1
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer]
+  
+  -- issuer creates an add approver proposal
+  proposal <- issuer `submit` do
+    createCmd AddApproverProposal
+      with
+        vault     = melissa
+        approver  = approver1
+        approvers = []
+        proposer  = issuer
+        auditor
+  
+  -- issuer approves
+  approval <- issuer `submit` do
+    proposal `exerciseCmd` AddApproverProposal_Approve
+      with approver = issuer
+  
+  -- issuer tries to execute add approver
+  issuer `submitMustFail` do
+    melissa `exerciseCmd` AddApprover
+      with
+        proposal = approval
+        executor = issuer
+  
+  -- issuer cancels the proposal
+  issuer `submit` do
+    approval `exerciseCmd` AddApproverProposal_Cancel
+  
+  -- assert proposal is archived
+  length <$> query @AddApproverProposal issuer
+    >>= assertEq 0
+  
+  return ()
+
+testProposeAddApprover_Negative_StaleProposal : Script ()
+testProposeAddApprover_Negative_StaleProposal = script do
+  [issuer,
+   alice,
+   bob,
+   auditor,
+   approver1,
+   approver2,
+   approver3] <- setup
+  
+  -- init vault
+  melissa <- issuer `submit` do
+    createCmd Melissa
+      with
+        issuer
+        auditor
+        approvers = [issuer]
+        threshold = 1
+        name      = "Vault 101"
+        assets    = Map.fromList [(alice, [coin 100.00])]
+  
+  -- assert initial approver(s)
+  Some Melissa { approvers } <- issuer `queryContractId` melissa
+  approvers === [issuer]
+  
+  -- issuer creates an add approver proposal
+  proposal1 <- issuer `submit` do
+    createCmd AddApproverProposal
+      with
+        vault     = melissa
+        approver  = approver1
+        approvers = []
+        proposer  = issuer
+        auditor
+  
+  -- issuer creates another add approver proposal
+  proposal2 <- issuer `submit` do
+    createCmd AddApproverProposal
+      with
+        vault     = melissa
+        approver  = approver2
+        approvers = []
+        proposer  = issuer
+        auditor
+  
+  -- issuer approves proposal1
+  approval1 <- issuer `submit` do
+    proposal1 `exerciseCmd` AddApproverProposal_Approve
+      with approver = issuer
+  
+  -- issuer approves proposal2
+  approval2 <- issuer `submit` do
+    proposal2 `exerciseCmd` AddApproverProposal_Approve
+      with approver = issuer
+  
+  -- approver1 executes add approver (proposal1)
+  Some disclosure <- issuer `queryDisclosure` melissa
+  melissa <- (actAs approver1 <> disclose disclosure) `submit` do
+    melissa `exerciseCmd` AddApprover
+      with
+        proposal = approval1
+        executor = approver1
+  
+  -- approver2 tries to execute add approver (proposal2)
+  Some disclosure <- issuer `queryDisclosure` melissa
+  (actAs approver2 <> disclose disclosure) `submitMustFail` do
+    melissa `exerciseCmd` AddApprover
+      with
+        proposal = approval2
+        executor = approver2
+  
+  -- issuer cancels proposal2 (stale)
+  issuer `submit` do
+    approval2 `exerciseCmd` AddApproverProposal_Cancel
+  
+  -- assert all proposals are archived
+  length <$> query @AddApproverProposal issuer
+    >>= assertEq 0
+  
+  return ()
