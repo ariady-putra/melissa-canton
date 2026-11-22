@@ -38,7 +38,7 @@ testProposeSetThreshold = script do
       with
         vault     = melissa
         threshold = 3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -47,12 +47,6 @@ testProposeSetThreshold = script do
   proposal <- (actAs issuer <> disclose disclosure) `submit` do
     proposal `exerciseCmd` SetThresholdProposal_Approve
       with approver = issuer
-  
-  -- approver2 approves
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` SetThresholdProposal_Approve
-      with approver = approver2
   
   -- approver1 executes set threshold
   melissa <- approver1 `submit` do
@@ -98,7 +92,7 @@ testProposeSetThreshold_Negative_ThresholdIsGtApprovers = script do
       with
         vault     = melissa
         threshold = 5
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -107,12 +101,6 @@ testProposeSetThreshold_Negative_ThresholdIsGtApprovers = script do
   proposal <- (actAs issuer <> disclose disclosure) `submit` do
     proposal `exerciseCmd` SetThresholdProposal_Approve
       with approver = issuer
-  
-  -- approver2 approves
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs approver2 <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` SetThresholdProposal_Approve
-      with approver = approver2
   
   -- approver1 executes set threshold
   approver1 `submitMustFail` do
@@ -166,7 +154,7 @@ testProposeSetThreshold_Negative_AlreadyApproved = script do
       with
         vault     = melissa
         threshold = 3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -224,7 +212,7 @@ testProposeSetThreshold_Negative_UnregisteredApprover = script do
       with
         vault     = melissa
         threshold = 3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -276,15 +264,9 @@ testProposeSetThreshold_Negative_InsufficientApprovals = script do
       with
         vault     = melissa
         threshold = 3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
-  
-  -- issuer approves
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs issuer <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` SetThresholdProposal_Approve
-      with approver = issuer
   
   -- approver1 executes set threshold
   approver1 `submitMustFail` do
@@ -333,7 +315,7 @@ testProposeSetThreshold_Negative_StaleProposal = script do
       with
         vault     = melissa
         threshold = 3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -343,7 +325,7 @@ testProposeSetThreshold_Negative_StaleProposal = script do
       with
         vault     = melissa
         threshold = 4
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -358,18 +340,6 @@ testProposeSetThreshold_Negative_StaleProposal = script do
   proposal2 <- (actAs issuer <> disclose disclosure) `submit` do
     proposal2 `exerciseCmd` SetThresholdProposal_Approve
       with approver = issuer
-  
-  -- approver2 approves proposal1
-  Some disclosure <- approver1 `queryDisclosure` proposal1
-  proposal1 <- (actAs approver2 <> disclose disclosure) `submit` do
-    proposal1 `exerciseCmd` SetThresholdProposal_Approve
-      with approver = approver2
-  
-  -- approver2 approves proposal2
-  Some disclosure <- approver1 `queryDisclosure` proposal2
-  proposal2 <- (actAs approver2 <> disclose disclosure) `submit` do
-    proposal2 `exerciseCmd` SetThresholdProposal_Approve
-      with approver = approver2
   
   -- approver1 executes set threshold (proposal1)
   melissa <- approver1 `submit` do

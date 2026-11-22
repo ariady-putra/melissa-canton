@@ -37,7 +37,7 @@ testProposeRemoveApprover = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -95,7 +95,7 @@ testProposeRemoveApprover_RemoveAnotherApprover = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -126,14 +126,9 @@ testProposeRemoveApprover_RemoveAnotherApprover = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [approver3]
         proposer  = approver3
         auditor
-  
-  -- approver3 approves
-  proposal <- approver3 `submit` do
-    proposal `exerciseCmd` RemoveApproverProposal_Approve
-      with approver = approver3
   
   -- issuer approves
   Some disclosure <- approver3 `queryDisclosure` proposal
@@ -185,7 +180,7 @@ testProposeRemoveApprover_Negative_AlreadyApproved = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -242,7 +237,7 @@ testProposeRemoveApprover_Negative_UnregisteredApprover = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -293,7 +288,7 @@ testProposeRemoveApprover_Negative_AlreadyUnregistered = script do
       with
         vault     = melissa
         approver  = auditor
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -344,15 +339,9 @@ testProposeRemoveApprover_Negative_InsufficientApprovals = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
-  
-  -- issuer approves
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs issuer <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` RemoveApproverProposal_Approve
-      with approver = issuer
   
   -- approver1 executes remove approver
   approver1 `submitMustFail` do
@@ -400,7 +389,7 @@ testProposeRemoveApprover_Negative_NotExecutedByProposer = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -410,16 +399,10 @@ testProposeRemoveApprover_Negative_NotExecutedByProposer = script do
     proposal `exerciseCmd` RemoveApproverProposal_Approve
       with approver = issuer
   
-  -- approver3 approves
-  Some disclosure <- approver1 `queryDisclosure` proposal
-  proposal <- (actAs approver3 <> disclose disclosure) `submit` do
-    proposal `exerciseCmd` RemoveApproverProposal_Approve
-      with approver = approver3
-  
-  -- approver2 tries to execute remove approver
-  approver2 `submitMustFail` do
+  -- issuer tries to execute remove approver
+  issuer `submitMustFail` do
     melissa `exerciseCmd` RemoveApprover
-      with proposal, executor = approver2
+      with proposal, executor = issuer
   
   -- approver1 cancels the proposal
   approver1 `submit` do
@@ -462,7 +445,7 @@ testProposeRemoveApprover_Negative_StaleProposal = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -472,7 +455,7 @@ testProposeRemoveApprover_Negative_StaleProposal = script do
       with
         vault     = melissa
         approver  = approver3
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   

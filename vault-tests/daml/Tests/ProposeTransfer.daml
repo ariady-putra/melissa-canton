@@ -171,14 +171,15 @@ testProposeTransfer_SenderHasMultipleTokens = script do
         approvers = [approver1, approver2, approver3]
         threshold = 2
         name      = "Vault 101"
-        assets    = Map.fromList [(alice, [coin 100.00, nft])]
+        assets    = Map.fromList
+          [(alice, [coin 100.00, nft "Everydays"])]
   
   -- assert alice's balance
   Some disclosure <- issuer `queryDisclosure` melissa
   (actAs alice <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = alice
-    >>= assertEq [coin 100.0, nft]
+    >>= assertEq [coin 100.0, nft "Everydays"]
   
   -- alice creates a transfer proposal
   proposal <- alice `submit` do
@@ -214,7 +215,7 @@ testProposeTransfer_SenderHasMultipleTokens = script do
   (actAs alice <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = alice
-    >>= assertEq [coin 80.0, nft]
+    >>= assertEq [coin 80.0, nft "Everydays"]
   
   -- assert bob's balance
   Some disclosure <- issuer `queryDisclosure` melissa
@@ -319,7 +320,7 @@ testProposeTransfer_ReceiverHasAnotherToken = script do
         threshold = 2
         name      = "Vault 101"
         assets    = Map.fromList
-          [(alice, [coin 100.00]), (bob, [nft])]
+          [(alice, [coin 100.00]), (bob, [nft "Clock"])]
   
   -- assert alice's balance
   Some disclosure <- issuer `queryDisclosure` melissa
@@ -369,7 +370,7 @@ testProposeTransfer_ReceiverHasAnotherToken = script do
   (actAs bob <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = bob
-    >>= assertEq [coin 20.0, nft]
+    >>= assertEq [coin 20.0, nft "Clock"]
   
   return ()
 
@@ -393,7 +394,7 @@ testProposeTransfer_ReceiverHasMultipleTokens = script do
         threshold = 2
         name      = "Vault 101"
         assets    = Map.fromList
-          [(alice, [coin 100.00]), (bob, [coin 50.00, nft])]
+          [(alice, [coin 100.00]), (bob, [coin 50.00, nft "Clock"])]
   
   -- assert alice's balance
   Some disclosure <- issuer `queryDisclosure` melissa
@@ -443,12 +444,12 @@ testProposeTransfer_ReceiverHasMultipleTokens = script do
   (actAs bob <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = bob
-    >>= assertEq [coin 70.0, nft]
+    >>= assertEq [coin 70.0, nft "Clock"]
   
   return ()
 
-testProposeTransfer_PartiesHasMultipleTokens : Script ()
-testProposeTransfer_PartiesHasMultipleTokens = script do
+testProposeTransfer_PartiesHaveMultipleTokens : Script ()
+testProposeTransfer_PartiesHaveMultipleTokens = script do
   [issuer,
    alice,
    bob,
@@ -467,14 +468,16 @@ testProposeTransfer_PartiesHasMultipleTokens = script do
         threshold = 2
         name      = "Vault 101"
         assets    = Map.fromList
-          [(alice, [coin 100.00, nft]), (bob, [coin 50.00, nft])]
+          [ (alice, [coin 100.00, nft "Everydays"])
+          , (bob  , [coin  50.00, nft "Clock"    ])
+          ]
   
   -- assert alice's balance
   Some disclosure <- issuer `queryDisclosure` melissa
   (actAs alice <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = alice
-    >>= assertEq [coin 100.0, nft]
+    >>= assertEq [coin 100.0, nft "Everydays"]
   
   -- alice creates a transfer proposal
   proposal <- alice `submit` do
@@ -510,14 +513,14 @@ testProposeTransfer_PartiesHasMultipleTokens = script do
   (actAs alice <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = alice
-    >>= assertEq [coin 80.0, nft]
+    >>= assertEq [coin 80.0, nft "Everydays"]
   
   -- assert bob's balance
   Some disclosure <- issuer `queryDisclosure` melissa
   (actAs bob <> disclose disclosure) `submit` do
     melissa `exerciseCmd` BalanceOf
       with owner = bob
-    >>= assertEq [coin 70.0, nft]
+    >>= assertEq [coin 70.0, nft "Clock"]
   
   return ()
 
@@ -625,7 +628,7 @@ testProposeTransfer_Negative_InvalidAssetName = script do
     createCmd TransferProposal
       with
         vault     = melissa
-        asset     = nft
+        asset     = nft "CryptoPunk"
         from      = alice
         to        = bob
         auditor

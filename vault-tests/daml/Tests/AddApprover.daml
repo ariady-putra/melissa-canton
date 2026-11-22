@@ -37,22 +37,15 @@ testProposeAddApprover = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
-  
-  -- issuer approves
-  approval <- issuer `submit` do
-    proposal `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
   
   -- approver1 executes add approver
   Some disclosure <- issuer `queryDisclosure` melissa
   melissa <- (actAs approver1 <> disclose disclosure) `submit` do
     melissa `exerciseCmd` AddApprover
-      with
-        proposal = approval
-        executor = approver1
+      with proposal, executor = approver1
   
   -- assert updated approver(s)
   Some Melissa { approvers } <- issuer `queryContractId` melissa
@@ -91,22 +84,15 @@ testProposeAddApprover_AddAnotherApprover = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
-  
-  -- issuer approves
-  approval <- issuer `submit` do
-    proposal `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
   
   -- approver1 executes add approver
   Some disclosure <- issuer `queryDisclosure` melissa
   melissa <- (actAs approver1 <> disclose disclosure) `submit` do
     melissa `exerciseCmd` AddApprover
-      with
-        proposal = approval
-        executor = approver1
+      with proposal, executor = approver1
   
   -- assert updated approver(s)
   Some Melissa { approvers } <- issuer `queryContractId` melissa
@@ -118,7 +104,7 @@ testProposeAddApprover_AddAnotherApprover = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [approver1]
         proposer  = approver1
         auditor
   
@@ -175,16 +161,11 @@ testProposeAddApprover_Negative_AlreadyApproved = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
   
-  -- issuer approves
-  proposal <- issuer `submit` do
-    proposal `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
-  
-  -- issuer re-approves
+  -- issuer tries to approve the proposal
   issuer `submitMustFail` do
     proposal `exerciseCmd` AddApproverProposal_Approve
       with approver = issuer
@@ -230,7 +211,7 @@ testProposeAddApprover_Negative_UnregisteredApprover = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
   
@@ -280,14 +261,14 @@ testProposeAddApprover_Negative_AlreadyRegistered = script do
       with
         vault     = melissa
         approver  = issuer
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
   
-  -- issuer approves
+  -- issuer is already registered as an approver
   issuer `submitMustFail` do
-    proposal `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
+    melissa `exerciseCmd` AddApprover
+      with proposal, executor = issuer
   
   -- issuer cancels the proposal
   issuer `submit` do
@@ -381,25 +362,18 @@ testProposeAddApprover_Negative_NotExecutedByTheNewApprover = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
-  
-  -- issuer approves
-  approval <- issuer `submit` do
-    proposal `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
   
   -- issuer tries to execute add approver
   issuer `submitMustFail` do
     melissa `exerciseCmd` AddApprover
-      with
-        proposal = approval
-        executor = issuer
+      with proposal, executor = issuer
   
   -- issuer cancels the proposal
   issuer `submit` do
-    approval `exerciseCmd` AddApproverProposal_Cancel
+    proposal `exerciseCmd` AddApproverProposal_Cancel
   
   -- assert proposal is archived
   length <$> query @AddApproverProposal issuer
@@ -438,7 +412,7 @@ testProposeAddApprover_Negative_StaleProposal = script do
       with
         vault     = melissa
         approver  = approver1
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
   
@@ -448,26 +422,16 @@ testProposeAddApprover_Negative_StaleProposal = script do
       with
         vault     = melissa
         approver  = approver2
-        approvers = []
+        approvers = [issuer]
         proposer  = issuer
         auditor
-  
-  -- issuer approves proposal1
-  approval1 <- issuer `submit` do
-    proposal1 `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
-  
-  -- issuer approves proposal2
-  approval2 <- issuer `submit` do
-    proposal2 `exerciseCmd` AddApproverProposal_Approve
-      with approver = issuer
   
   -- approver1 executes add approver (proposal1)
   Some disclosure <- issuer `queryDisclosure` melissa
   melissa <- (actAs approver1 <> disclose disclosure) `submit` do
     melissa `exerciseCmd` AddApprover
       with
-        proposal = approval1
+        proposal = proposal1
         executor = approver1
   
   -- approver2 tries to execute add approver (proposal2)
@@ -475,12 +439,12 @@ testProposeAddApprover_Negative_StaleProposal = script do
   (actAs approver2 <> disclose disclosure) `submitMustFail` do
     melissa `exerciseCmd` AddApprover
       with
-        proposal = approval2
+        proposal = proposal2
         executor = approver2
   
   -- issuer cancels proposal2 (stale)
   issuer `submit` do
-    approval2 `exerciseCmd` AddApproverProposal_Cancel
+    proposal2 `exerciseCmd` AddApproverProposal_Cancel
   
   -- assert all proposals are archived
   length <$> query @AddApproverProposal issuer

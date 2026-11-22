@@ -6,8 +6,8 @@ import Daml.Script
 coin : Decimal -> Token
 coin amount = Token with name = "COIN", amount
 
-nft : Token
-nft = Token with name = "NFT", amount = 1.0
+nft : Text -> Token
+nft name = Token with name, amount = 1.0
 
 setup : Script [Party]
 setup = mapA
